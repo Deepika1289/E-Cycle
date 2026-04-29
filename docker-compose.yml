@@ -1,0 +1,45 @@
+version: '3.9'
+services:
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/cycles
+      - PORT=3000
+      - CLIENT_URL=http://localhost:5173
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - JWT_SECRET=${JWT_SECRET}
+      - AI_URL=http://ai:8000
+    depends_on:
+      - mongo
+      - ai
+    ports:
+      - "3000:3000"
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    ports:
+      - "5173:80"
+    depends_on:
+      - server
+  ai:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    ports:
+      - "8000:8000"
+volumes:
+  mongo_data:
