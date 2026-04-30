@@ -69,7 +69,7 @@ router.post('/unlock', authenticate, async (req: any, res, next) => {
     res.json({
       message: 'QR code verified successfully',
       unlockToken,
-      cycle: { id: cycle._id, code: cycle.code, model: cycle.model, batteryLevel: cycle.batteryLevel },
+      cycle: { id: cycle._id, code: cycle.code, model: cycle.cycleModel, batteryLevel: cycle.batteryLevel },
       booking: { id: booking._id, startTime: booking.startTime, estimatedCost: booking.estimatedCost }
     });
   } catch (error) {
@@ -165,7 +165,7 @@ router.get('/verify/:cycleId', authenticate, async (req: any, res, next) => {
     });
 
     res.json({
-      cycle: { id: cycle._id, code: cycle.code, model: cycle.model, status: cycle.status, batteryLevel: cycle.batteryLevel },
+      cycle: { id: cycle._id, code: cycle.code, model: cycle.cycleModel, status: cycle.status, batteryLevel: cycle.batteryLevel },
       hasBooking: !!booking,
       booking: booking ? { id: booking._id, status: booking.status, paymentStatus: booking.paymentStatus } : null
     });

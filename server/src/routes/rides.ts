@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { io } from '../server.js';
-import { startRideSchema, updateLocationSchema } from '../validators/ride.ts';
+import { startRideSchema, updateLocationSchema } from '../validators/ride.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { Ride } from '../models/Ride.js';

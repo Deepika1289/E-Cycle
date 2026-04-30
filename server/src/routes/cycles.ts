@@ -9,7 +9,7 @@ const router = Router();
 
 const createCycleSchema = z.object({
   code: z.string().min(1),
-  model: z.string().min(1),
+  model: z.string().min(1), // API uses 'model', mapped to 'cycleModel' in DB
   latitude: z.number(),
   longitude: z.number(),
   stationId: z.string().optional(),
@@ -19,7 +19,7 @@ const createCycleSchema = z.object({
 
 const updateCycleSchema = z.object({
   code: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
+  model: z.string().min(1).optional(), // API uses 'model', mapped to 'cycleModel' in DB
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   stationId: z.string().optional(),
@@ -46,7 +46,7 @@ const updateCycleSchema = z.object({
  *               code:
  *                 type: string
  *                 example: "CYC001"
- *               model:
+ *               cycleModel:
  *                 type: string
  *                 example: "Mountain Bike"
  *               latitude:
@@ -89,7 +89,7 @@ router.post('/', authenticate, authorize('MANAGER', 'ADMIN'), async (req, res, n
 
     const cycle = new Cycle({
       code: validated.code,
-      model: validated.model,
+      cycleModel: validated.model, // Map API 'model' to DB 'cycleModel'
       batteryLevel: validated.batteryLevel ?? 100,
       status: 'AVAILABLE',
       location: { type: 'Point', coordinates: [validated.longitude, validated.latitude] },
@@ -312,7 +312,7 @@ router.get('/:id', async (req, res, next) => {
  *               code:
  *                 type: string
  *                 example: "CYC001"
- *               model:
+ *               cycleModel:
  *                 type: string
  *                 example: "Mountain Bike"
  *               latitude:
@@ -375,7 +375,7 @@ router.put('/:id', authenticate, authorize('MANAGER', 'ADMIN'), async (req, res,
     const oldStationId = cycle.station?.toString();
     const newStationId = validated.stationId;
     
-    if (validated.model) cycle.set('model', validated.model);
+    if (validated.model) cycle.set('cycleModel', validated.model); // Map API 'model' to DB 'cycleModel'
     if (validated.batteryLevel !== undefined) cycle.set('batteryLevel', validated.batteryLevel);
     if (validated.status) cycle.set('status', validated.status);
     if (validated.imageUrl !== undefined) cycle.set('imageUrl', validated.imageUrl);

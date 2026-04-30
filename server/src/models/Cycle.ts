@@ -8,7 +8,9 @@ const CycleSchema = new Schema<ICycle>({
     unique: true,
     trim: true
   },
-  model: {
+  // Note: Using 'cycleModel' internally to avoid Mongoose reserved word 'model'
+  // API will still use 'model' for backward compatibility
+  cycleModel: {
     type: String,
     required: true,
     trim: true
@@ -80,5 +82,19 @@ const CycleSchema = new Schema<ICycle>({
 CycleSchema.index({ location: '2dsphere' });
 CycleSchema.index({ status: 1 });
 CycleSchema.index({ station: 1 });
+
+// Add virtual property to map 'cycleModel' to 'model' for API compatibility
+CycleSchema.virtual('model').get(function() {
+  return this.cycleModel;
+});
+
+CycleSchema.set('toJSON', {
+  virtuals: true,
+  transform: function(doc, ret) {
+    ret.model = ret.cycleModel;
+    delete ret.cycleModel;
+    return ret;
+  }
+});
 
 export const Cycle = mongoose.model<ICycle>('Cycle', CycleSchema);

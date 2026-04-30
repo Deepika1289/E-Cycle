@@ -1,10 +1,15 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import QRCode from 'qrcode';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 import { User } from '../models/User.js';
 import { Station } from '../models/Station.js';
 import { Cycle } from '../models/Cycle.js';
 import { connectDB } from '../config/database.js';
+
+dotenv.config();
 
 const seedData = async () => {
   try {
@@ -207,7 +212,7 @@ const seedData = async () => {
       
       cycles.push({
         code,
-        model,
+        cycleModel: model,
         batteryLevel: Math.floor(Math.random() * 100) + 1,
         status: Math.random() > 0.2 ? 'AVAILABLE' : 'MAINTENANCE', // 80% available
         location: {
@@ -261,8 +266,8 @@ Cycles: ${createdCycles.length}
   }
 };
 
-// Only run if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Only run if this file is executed directly.
+if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1])) {
   seedData();
 }
 

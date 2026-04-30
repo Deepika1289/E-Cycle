@@ -1,5 +1,5 @@
 import express from 'express';
-import { getOtpMetrics } from '../utils/otp';
+import { getOtpMetrics } from '../utils/otp.js';
 
 const router = express.Router();
 

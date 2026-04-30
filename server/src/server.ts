@@ -24,7 +24,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { setupSocketHandlers } from './services/socketService.js';
 import { socketAuth } from './middleware/socketAuth.js';
 import { analyticsRoutes } from './routes/analytics.js';
-import metricsRoutes from './routes/metrics';
+import metricsRoutes from './routes/metrics.js';
 import zoneRoutes from './routes/zones.js';
 import { checkAndEndScheduledRides } from './jobs/autoEndRides.js';
 
@@ -64,6 +64,16 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/zones', zoneRoutes);
+
+// Health check endpoint for Render
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
 // Swagger documentation
 try {
