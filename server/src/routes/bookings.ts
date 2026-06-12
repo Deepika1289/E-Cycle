@@ -3,6 +3,7 @@ import { z } from 'zod';
 import mongoose from 'mongoose';
 import { Booking } from '../models/Booking.js';
 import { Cycle } from '../models/Cycle.js';
+import { Station } from '../models/Station.js';
 import { authenticate } from '../middleware/auth.js';
 import { io } from '../server.js';
 
@@ -84,17 +85,9 @@ router.get('/', authenticate, async (req: any, res, next) => {
 router.post('/', authenticate, async (req: any, res, next) => {
   try {
     const validatedData = createBookingSchema.parse(req.body);
-    
-    // Validate that station IDs are valid ObjectIds
-    if (!mongoose.Types.ObjectId.isValid(validatedData.startStationId) || 
-        !mongoose.Types.ObjectId.isValid(validatedData.endStationId)) {
-      return res.status(400).json({ 
-        message: 'Invalid station IDs provided. Please select valid stations.' 
-      });
-    }
 
     // Check if cycle exists and is available
-    const cycle = await Cycle.findById(validatedData.cycleId);
+    const cycle = await Cycle.findById(validatedData.cycleId).populate('station');
     if (!cycle) {
       return res.status(404).json({ message: 'Cycle not found' });
     }
@@ -104,6 +97,28 @@ router.post('/', authenticate, async (req: any, res, next) => {
         message: 'Cycle is not available for booking',
         currentStatus: cycle.status
       });
+    }
+
+    // Resolve station IDs: use provided, or fall back to cycle's assigned station
+    let startStationId = validatedData.startStationId;
+    let endStationId = validatedData.endStationId;
+
+    const cycleStationId = (cycle as any).station?._id?.toString() || (cycle as any).station?.toString();
+
+    // If provided IDs are invalid ObjectIds, try to use the cycle's own station
+    if (!mongoose.Types.ObjectId.isValid(startStationId)) {
+      if (cycleStationId && mongoose.Types.ObjectId.isValid(cycleStationId)) {
+        startStationId = cycleStationId;
+        endStationId = cycleStationId;
+      } else {
+        // Find any station as fallback
+        const anyStation = await Station.findOne({ status: 'ACTIVE' }).select('_id');
+        if (!anyStation) {
+          return res.status(400).json({ message: 'No stations available. Please contact admin.' });
+        }
+        startStationId = anyStation._id.toString();
+        endStationId = anyStation._id.toString();
+      }
     }
 
     // Check if user has any active bookings
@@ -138,8 +153,8 @@ router.post('/', authenticate, async (req: any, res, next) => {
     const booking = new Booking({
       user: req.user._id,
       cycle: validatedData.cycleId,
-      startStation: validatedData.startStationId,
-      endStation: validatedData.endStationId,
+      startStation: startStationId,
+      endStation: endStationId,
       startTime: new Date(validatedData.startTime),
       endTime: new Date(validatedData.endTime),
       duration: validatedData.duration,

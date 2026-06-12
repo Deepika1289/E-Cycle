@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { io } from '../server.js';
-import { startRideSchema, updateLocationSchema } from '../validators/ride.js';
+import { startRideSchema, updateLocationSchema } from '../validators/ride.ts';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { Ride } from '../models/Ride.js';
@@ -400,10 +400,17 @@ router.post('/:id/end', authenticate, async (req: any, res, next) => {
       $inc: { totalRides: 1, totalDistance: ride.distance }
     });
 
-    // Deduct cost from user wallet
-    await User.findByIdAndUpdate(req.user._id, {
-      $inc: { walletBalance: -totalCost }
-    });
+    // Get the booking to know what was already paid
+    const booking = await Booking.findById(ride.booking);
+    const alreadyPaid = booking?.paymentStatus === 'PAID' ? (booking?.estimatedCost || 0) : 0;
+
+    // Only charge the difference if actual cost exceeds what was paid upfront
+    const extraCharge = Math.max(0, totalCost - alreadyPaid);
+    if (extraCharge > 0) {
+      await User.findByIdAndUpdate(req.user._id, {
+        $inc: { walletBalance: -extraCharge }
+      });
+    }
 
     const populatedRide = await Ride.findById(ride._id)
       .populate('cycle', 'code model')

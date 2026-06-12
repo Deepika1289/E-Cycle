@@ -1,17 +1,62 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { QrCode, Camera, Upload, AlertCircle } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { QrCode, Camera, Upload, AlertCircle, Play } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { qrAPI, rideAPI } from '../services/api';
 import toast from 'react-hot-toast';
 
 export const ScanPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const bookingIdFromHistory = searchParams.get('bookingId');
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // If redirected from History with a bookingId, offer to start directly
+  const handleDirectStart = async () => {
+    if (!bookingIdFromHistory) return;
+    try {
+      setIsProcessing(true);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const rideResponse = await rideAPI.start({
+                bookingId: bookingIdFromHistory,
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+              });
+              toast.success('Ride started successfully!');
+              navigate(`/user/ride/${rideResponse.data.ride._id}`);
+            } catch (error: any) {
+              toast.error(error.response?.data?.message || 'Failed to start ride');
+            } finally {
+              setIsProcessing(false);
+            }
+          },
+          () => {
+            // Location denied — use default coordinates
+            rideAPI.start({
+              bookingId: bookingIdFromHistory,
+              latitude: 20.2961,
+              longitude: 85.8245
+            }).then(res => {
+              toast.success('Ride started!');
+              navigate(`/user/ride/${res.data.ride._id}`);
+            }).catch((err: any) => {
+              toast.error(err.response?.data?.message || 'Failed to start ride');
+            }).finally(() => setIsProcessing(false));
+          }
+        );
+      }
+    } catch {
+      setIsProcessing(false);
+      toast.error('Failed to start ride');
+    }
+  };
 
   const handleStartScanning = () => {
     setIsScanning(true);
@@ -139,6 +184,22 @@ export const ScanPage: React.FC = () => {
       </div>
 
       <div className="space-y-6">
+        {/* Direct Start from History */}
+        {bookingIdFromHistory && (
+          <div className="bg-green-50 border border-green-300 rounded-xl p-6 text-center">
+            <Play className="h-10 w-10 text-green-600 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-green-900 mb-2">Ready to Ride!</h3>
+            <p className="text-green-700 mb-4">Your booking is confirmed. Start your ride now.</p>
+            <button
+              onClick={handleDirectStart}
+              disabled={isProcessing}
+              className="bg-green-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              {isProcessing ? 'Starting...' : 'Start Ride Now'}
+            </button>
+          </div>
+        )}
+
         {/* Scanner Container */}
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
           {!isScanning && (

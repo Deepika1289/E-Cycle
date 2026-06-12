@@ -5,8 +5,6 @@ import {
   Clock, 
   MapPin, 
   CreditCard, 
-  TrendingUp, 
-  Battery,
   Plus,
   ArrowRight,
   Square,
@@ -15,7 +13,7 @@ import {
   Zap
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { rideAPI, aiAPI, paymentAPI, bookingAPI, cycleAPI } from '../services/api';
+import { rideAPI, paymentAPI, bookingAPI, cycleAPI } from '../services/api';
 import toast from 'react-hot-toast';
 import { AIRecommendations } from '../components/AIRecommendations';
 
@@ -52,7 +50,7 @@ interface ActiveRide {
 }
 
 export const DashboardPage: React.FC = () => {
-  const { user, updateUser, refreshAuth } = useAuth();
+  const { user, refreshAuth } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalRides: 0,
     totalDistance: 0,
@@ -90,7 +88,7 @@ export const DashboardPage: React.FC = () => {
             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
           });
           userLocation = [position.coords.latitude, position.coords.longitude];
-        } catch (error) {
+        } catch (_error) {
           console.warn('Could not get user location:', error);
         }
       }
@@ -154,7 +152,7 @@ export const DashboardPage: React.FC = () => {
 
       // AI recommendations are now handled by the AIRecommendations component
 
-    } catch (error) {
+    } catch (_error) {
       console.error('Error loading dashboard data:', error);
       toast.error('Failed to load dashboard data');
     } finally {
@@ -203,7 +201,6 @@ export const DashboardPage: React.FC = () => {
       
       // Check if it's an authentication error
       if (error.response?.status === 401) {
-        console.log('handleEndRide - Authentication error detected');
         toast.error('Authentication expired. Please log in again.');
         // The auth interceptor should handle token removal and redirect
         return;
@@ -243,7 +240,6 @@ export const DashboardPage: React.FC = () => {
       
       // Check if it's an authentication error
       if (error.response?.status === 401) {
-        console.log('handleCancelRide - Authentication error detected');
         toast.error('Authentication expired. Please log in again.');
         // The auth interceptor should handle token removal and redirect
         return;
@@ -284,21 +280,15 @@ export const DashboardPage: React.FC = () => {
         amount: topupAmount
       });
 
-      // Simulate payment confirmation (in real app, user would pay via UPI)
+      // Confirm the payment (server increments wallet balance in DB)
       await paymentAPI.confirm(response.data.payment._id);
-
-      // Update user wallet balance
-      if (user) {
-        updateUser({
-          ...user,
-          walletBalance: user.walletBalance + topupAmount
-        });
-      }
 
       toast.success(`Wallet topped up with ₹${topupAmount}!`);
       setTopupAmount(100);
-      loadDashboardData(); // Refresh dashboard
-    } catch (error) {
+      // Re-fetch user from server to get the accurate wallet balance
+      await refreshAuth();
+      loadDashboardData();
+    } catch (_error) {
       toast.error('Failed to top up wallet');
     } finally {
       setIsTopingUp(false);

@@ -7,31 +7,29 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { lazy, Suspense } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import LoadingSpinner from './components/LoadingSpinner';
 
-// Auth Pages
+// Auth Pages (small — keep eager)
 import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import RequestOtpPage from './pages/RequestOtp';
 import VerifyOtpPage from './pages/VerifyOtpPage';
-
-// User Pages
-import { HomePage } from './pages/HomePage';
-import { CyclesPage } from './pages/CyclesPage';
-import { BookingPage } from './pages/BookingPage';
-import { RidePage } from './pages/RidePage';
-import { HistoryPage } from './pages/HistoryPage';
-import { ScanPage } from './pages/ScanPage';
-import { IssuesPage } from './pages/IssuesPage';
-import ProfilePage from './pages/ProfilePage';
-import NotificationsPage from './pages/NotificationsPage';
-
-// Management Pages
-import AdminPage from './pages/admin/AdminPage';
-import { DashboardPage } from './pages/DashboardPage';
 import { LandingPage } from './pages/LandingPage';
 
-// Lazy-loaded Management Modules
-const ManagerPage = lazy(() => import('./pages/manager/ManagerPage').then(module => ({ default: module.ManagerPage })));
+// Lazy-loaded User Pages
+const HomePage = lazy(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
+const CyclesPage = lazy(() => import('./pages/CyclesPage').then(m => ({ default: m.CyclesPage })));
+const BookingPage = lazy(() => import('./pages/BookingPage').then(m => ({ default: m.BookingPage })));
+const RidePage = lazy(() => import('./pages/RidePage').then(m => ({ default: m.RidePage })));
+const HistoryPage = lazy(() => import('./pages/HistoryPage').then(m => ({ default: m.HistoryPage })));
+const ScanPage = lazy(() => import('./pages/ScanPage').then(m => ({ default: m.ScanPage })));
+const IssuesPage = lazy(() => import('./pages/IssuesPage').then(m => ({ default: m.IssuesPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+
+// Lazy-loaded Management Pages
+const AdminPage = lazy(() => import('./pages/admin/AdminPage'));
+const ManagerPage = lazy(() => import('./pages/manager/ManagerPage').then(m => ({ default: m.ManagerPage })));
 
 function App() {
   return (
@@ -45,6 +43,7 @@ function App() {
           }}
         >
           <AuthProvider>
+            <Suspense fallback={<LoadingSpinner />}>
             <Routes>
                     <Route path="/" element={<LandingPage />} />
                     
@@ -56,14 +55,15 @@ function App() {
                     <Route path="/auth/verify-otp" element={<VerifyOtpPage />} />
                     <Route path="/auth/request-otp" element={<RequestOtpPage />} />
 
-                    {/* Public History Page - no authentication required */}
+                    {/* Protected User Routes */}
                     <Route path="/history" element={
-                      <Layout>
-                        <HistoryPage />
-                      </Layout>
+                      <ProtectedRoute allowedRoles={["USER"]}>
+                        <Layout>
+                          <HistoryPage />
+                        </Layout>
+                      </ProtectedRoute>
                     } />
 
-                    {/* Protected User Routes */}
                     <Route path="/user/dashboard" element={
                       <ProtectedRoute allowedRoles={["USER"]}>
                         <Layout>
@@ -88,18 +88,20 @@ function App() {
                       </ProtectedRoute>
                     } />
                     
-                    {/* Public Ride Page - no authentication required */}
                     <Route path="/user/ride/:rideId" element={
-                      <Layout>
-                        <RidePage />
-                      </Layout>
+                      <ProtectedRoute allowedRoles={["USER"]}>
+                        <Layout>
+                          <RidePage />
+                        </Layout>
+                      </ProtectedRoute>
                     } />
                     
-                    {/* Removed ProtectedRoute wrapper for HistoryPage to make it public */}
                     <Route path="/user/history" element={
-                      <Layout>
-                        <HistoryPage />
-                      </Layout>
+                      <ProtectedRoute allowedRoles={["USER"]}>
+                        <Layout>
+                          <HistoryPage />
+                        </Layout>
+                      </ProtectedRoute>
                     } />
                     
                     <Route path="/user/scan" element={
@@ -151,13 +153,12 @@ function App() {
                       </ProtectedRoute>
                     } />
 
-                    {/* Public Manager Routes - no authentication required */}
                     <Route path="/manager/*" element={
-                      <Layout>
-                        <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+                      <ProtectedRoute allowedRoles={["MANAGER", "ADMIN"]}>
+                        <Layout>
                           <ManagerPage />
-                        </Suspense>
-                      </Layout>
+                        </Layout>
+                      </ProtectedRoute>
                     } />
 
                     {/* Protected Admin Routes */}
@@ -177,16 +178,19 @@ function App() {
                       </ProtectedRoute>
                     } />
 
-                    {/* Public Admin Routes with proper sub-routing */}
+                    {/* Protected Admin Dashboard with sub-routing */}
                     <Route path="/admin/*" element={
-                      <Layout>
-                        <AdminPage />
-                      </Layout>
+                      <ProtectedRoute allowedRoles={["ADMIN"]}>
+                        <Layout>
+                          <AdminPage />
+                        </Layout>
+                      </ProtectedRoute>
                     } />
 
                     {/* Fallback Route */}
                     <Route path="*" element={<Navigate to="/auth/login" replace />} />
                   </Routes>
+            </Suspense>
         <Toaster
           position="top-right"
           toastOptions={{

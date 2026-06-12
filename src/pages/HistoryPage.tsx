@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Clock, 
-  MapPin, 
   Bike, 
   CreditCard, 
   Filter,
@@ -68,7 +67,7 @@ export const HistoryPage: React.FC = () => {
   const [payments, setPayments] = useState<PaymentHistory[]>([]);
   const [bookings, setBookings] = useState<BookingHistory[]>([]);
   
-  const [isLoading, setIsLoading] = useState(false);
+  const [_isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   
@@ -150,7 +149,7 @@ export const HistoryPage: React.FC = () => {
   };
 
   // Functions that redirect to respective pages instead of performing API operations
-  const handleEndRide = (rideId: string) => {
+  const handleEndRide = (_rideId: string) => {
     // Redirect to ride ending page or home
     navigate('/user/dashboard');
   };
@@ -169,11 +168,12 @@ export const HistoryPage: React.FC = () => {
   };
 
   const handleStartRide = (bookingId: string) => {
-    // Redirect to ride start page
-    navigate(`/user/ride/${bookingId}`);
+    // Navigate to the scan/booking page to start the ride
+    // (RidePage expects a ride ID, not a booking ID — ride is created via /rides/start)
+    navigate(`/user/scan?bookingId=${bookingId}`);
   };
 
-  const renderRideItem = (ride: RideHistory) => (
+  const _renderRideItem = (ride: RideHistory) => (
     <div className="flex items-center justify-between p-4 border-b">
       <div className="flex items-center space-x-4">
         <div className={`p-2 rounded-full ${getStatusColor(ride.status)}`}>

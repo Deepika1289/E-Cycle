@@ -376,23 +376,27 @@ router.post('/:id/confirm', authenticate, async (req: any, res, next) => {
   try {
     const payment = await Payment.findOne({ _id: req.params.id, user: req.user._id, status: 'PENDING' });
     if (!payment) return res.status(404).json({ message: 'Pending payment not found' });
-    const isSuccessful = Math.random() > 0.1;
-    if (isSuccessful) {
-      payment.status = 'COMPLETED';
-      payment.gatewayResponse = { status: 'SUCCESS', timestamp: new Date(), gatewayTransactionId: `GTW_${Date.now()}` };
-      if (payment.type === 'WALLET_TOPUP') {
-        await User.findByIdAndUpdate(req.user._id, { $inc: { walletBalance: payment.amount } });
-      }
-      if (payment.booking) {
-        await Booking.findByIdAndUpdate(payment.booking, { paymentStatus: 'PAID', status: 'CONFIRMED' });
-      }
-      res.json({ message: 'Payment completed successfully', payment });
-    } else {
-      payment.status = 'FAILED';
-      payment.gatewayResponse = { status: 'FAILED', timestamp: new Date(), error: 'Payment processing failed' };
-      res.status(400).json({ message: 'Payment failed', payment });
+
+    // Simulated payment — always succeeds (no real gateway)
+    payment.status = 'COMPLETED';
+    payment.gatewayResponse = {
+      status: 'SUCCESS',
+      timestamp: new Date(),
+      gatewayTransactionId: `SIM_${Date.now()}`
+    };
+
+    if (payment.type === 'WALLET_TOPUP') {
+      await User.findByIdAndUpdate(req.user._id, { $inc: { walletBalance: payment.amount } });
     }
+    if (payment.booking) {
+      await Booking.findByIdAndUpdate(payment.booking, {
+        paymentStatus: 'PAID',
+        status: 'CONFIRMED'
+      });
+    }
+
     await payment.save();
+    res.json({ message: 'Payment completed successfully', payment });
   } catch (error) {
     return next(error);
   }

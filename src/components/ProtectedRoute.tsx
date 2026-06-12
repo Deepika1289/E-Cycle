@@ -15,12 +15,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { user, isLoading, token, refreshAuth } = useAuth();
   const location = useLocation();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshDone, setRefreshDone] = useState(false);
 
-  console.log('ProtectedRoute - Checking authentication:', { user: !!user, token: !!token, isLoading, isRefreshing });
+  // If we have a token but no user yet, attempt a refresh — inside useEffect, not during render
+  useEffect(() => {
+    if (token && !user && !isLoading && !isRefreshing && !refreshDone) {
+      setIsRefreshing(true);
+      refreshAuth().finally(() => {
+        setIsRefreshing(false);
+        setRefreshDone(true);
+      });
+    }
+  }, [token, user, isLoading, isRefreshing, refreshDone, refreshAuth]);
 
-  // Show loading spinner while checking authentication
+  // Show spinner while auth is initialising or we're refreshing
   if (isLoading || isRefreshing) {
-    console.log('ProtectedRoute - Still loading authentication');
     return (
       <LoadingSpinner 
         fullScreen 
@@ -31,34 +40,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Check if we have a token but no user data - try to fetch user data
-  if (token && !user && !isRefreshing) {
-    console.log('ProtectedRoute - Token exists but no user data, attempting to refresh auth');
-    // Attempt to refresh authentication directly
-    setIsRefreshing(true);
-    refreshAuth().finally(() => {
-      setIsRefreshing(false);
-    });
-    // Show loading spinner while refreshing
-    return (
-      <LoadingSpinner 
-        fullScreen 
-        text="Refreshing authentication..." 
-        size="lg" 
-        color="blue"
-      />
-    );
-  }
-
-  // Redirect to login if no token
+  // After a refresh attempt: if still no token → login
   if (!token) {
-    console.log('ProtectedRoute - No token, redirecting to login');
-    // Check if we're already on the login page to avoid infinite redirects
     if (location.pathname === '/auth/login' || location.pathname === '/login') {
-      console.log('ProtectedRoute - Already on login page, rendering children');
       return <>{children}</>;
     }
-    // Store the intended destination in state so we can redirect after login
     return (
       <Navigate 
         to="/auth/login" 
@@ -68,9 +54,19 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Check if user has required role
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    console.log('ProtectedRoute - User role not allowed:', { userRole: user.role, allowedRoles });
+  // Token present but user still null after refresh attempt → login
+  if (!user) {
+    return (
+      <Navigate 
+        to="/auth/login" 
+        state={{ from: location }} 
+        replace 
+      />
+    );
+  }
+
+  // Role check
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50 dark:from-gray-900 dark:to-gray-800 px-4">
         <div className="max-w-md w-full text-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-red-200 dark:border-red-800">
@@ -83,7 +79,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             Access Denied
           </h2>
           <p className="text-slate-600 dark:text-slate-300 mb-6">
-            You don't have permissions to access this page.
+            You don't have permission to access this page.
           </p>
           <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
             Required role: <span className="font-semibold">{allowedRoles.join(' or ')}</span><br />
@@ -100,6 +96,5 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  console.log('ProtectedRoute - Authentication successful, rendering children');
   return <>{children}</>;
 };

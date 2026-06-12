@@ -1,23 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Bike, 
   Battery, 
   MapPin, 
-  Clock, 
   CreditCard, 
   Wallet,
   QrCode,
   ArrowLeft,
-  Search,
-  Filter,
   AlertCircle,
   RefreshCw
 } from 'lucide-react';
 import { cycleAPI, bookingAPI, paymentAPI, stationAPI, rideAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-
 // Cycle image URLs - different images for different cycle types
 const MOUNTAIN_BIKE_IMAGE = 'https://images.unsplash.com/photo-1486025402772-b75f768b7b4a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80';
 const ROAD_BIKE_IMAGE = 'https://images.unsplash.com/photo-1571068316344-75bc76d2421a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&q=80';
@@ -92,7 +88,7 @@ const getCycleImage = (cycle: Cycle): string => {
 export const BookingPage: React.FC = () => {
   const { cycleId } = useParams<{ cycleId: string }>();
   const navigate = useNavigate();
-  const { user, updateUser } = useAuth();
+  const { user, refreshAuth } = useAuth();
   
   const [cycle, setCycle] = useState<Cycle | null>(null);
   const [availableCycles, setAvailableCycles] = useState<Cycle[]>([]);
@@ -146,7 +142,6 @@ export const BookingPage: React.FC = () => {
       setIsLoading(true);
       setError(null); // Clear any previous errors
       
-      console.log('🔄 Loading cycles and stations...');
       
       // Get user location for nearby cycles
       let userLocation: [number, number] = [28.6667, 77.2167]; // Default
@@ -178,11 +173,8 @@ export const BookingPage: React.FC = () => {
         })
       ]);
       
-      console.log('✅ Cycles API response:', cyclesResponse.data);
-      console.log('✅ Stations API response:', stationsResponse.data);
       
       const cycles = cyclesResponse.data.cycles || cyclesResponse.data;
-      console.log(`Found ${cycles.length} available cycles.`);
       setAvailableCycles(cycles);
       
       // Ensure stations data is properly structured
@@ -196,8 +188,6 @@ export const BookingPage: React.FC = () => {
         stationsData = stationsResponse.data || [];
       }
       
-      console.log('📋 Processed stations data:', stationsData);
-      console.log('📋 Processed stations count:', stationsData.length);
       
       // If no stations found, show appropriate message
       if (stationsData.length === 0) {
@@ -213,14 +203,11 @@ export const BookingPage: React.FC = () => {
       
       setStations(stationsData);
       
-      console.log(`Found ${stationsData.length} stations.`);
       
       // If a specific cycle is selected, load its details
       if (cycleId) {
         try {
-          console.log(`🔄 Loading cycle details for ID: ${cycleId}`);
           const response = await cycleAPI.getById(cycleId);
-          console.log('✅ Cycle details response:', response.data);
           setCycle(response.data);
         } catch (error) {
           console.error('❌ Error loading cycle details:', error);
@@ -315,11 +302,20 @@ export const BookingPage: React.FC = () => {
     try {
       setIsBooking(true);
 
+      // Determine station ID: use cycle's station, or the selected station filter, or first available
+      const stationId = cycle.station?._id || selectedStation || (stations.length > 0 ? stations[0]._id : '');
+
+      if (!stationId) {
+        toast.error('No station available for this cycle. Please contact support.');
+        setIsBooking(false);
+        return;
+      }
+
       // Create booking - using cycle's current station for both start and end
       const bookingResponse = await bookingAPI.create({
         cycleId: cycle._id,
-        startStationId: cycle.station?._id || '', // Use cycle's current station
-        endStationId: cycle.station?._id || '',   // Use cycle's current station
+        startStationId: stationId,
+        endStationId: stationId,
         startTime: startTime,
         endTime: endTime,
         duration: duration
@@ -339,25 +335,12 @@ export const BookingPage: React.FC = () => {
 
       // Handle different payment methods
       if (paymentMethod === 'WALLET') {
-        // Confirm wallet payment immediately
-        try {
-          await paymentAPI.confirm(payment._id);
-        } catch (confirmError) {
-          console.error('Payment confirmation failed:', confirmError);
-          toast.error('Payment confirmation failed. Please try again.');
-          setIsBooking(false);
-          return;
-        }
-      
-        // Update user wallet balance
-        updateUser({
-          ...user,
-          walletBalance: user.walletBalance - booking.estimatedCost
-        });
-      
+        // Wallet payment is confirmed immediately by server on payment.create
+        // (server does $inc walletBalance: -amount automatically)
         toast.success('Booking confirmed! Starting your ride...');
         try {
-          // Instead of going to scan page, directly start the ride
+          // Refresh user balance from server, then start ride
+          await refreshAuth();
           await startRideDirectly(booking._id);
         } catch (navError) {
           console.error('Ride start failed:', navError);
@@ -853,7 +836,6 @@ export const BookingPage: React.FC = () => {
   // Function to start ride directly without QR code scanning
   const startRideDirectly = async (bookingId: string) => {
     try {
-      console.log('startRideDirectly - Starting ride with bookingId:', bookingId);
       // Get user location for ride start
       let latitude = 28.6667; // Default location
       let longitude = 77.2167;
@@ -875,18 +857,15 @@ export const BookingPage: React.FC = () => {
       }
       
       // Start the ride using the rideAPI
-      console.log('startRideDirectly - Calling rideAPI.start with location:', { latitude, longitude });
       const response = await rideAPI.start({
         bookingId: bookingId,
         latitude: latitude,
         longitude: longitude
       });
       
-      console.log('startRideDirectly - Ride started successfully, response:', response.data);
       toast.success('Ride started successfully!');
       
       // Navigate to the ride tracking page
-      console.log('startRideDirectly - Navigating to ride page:', `/user/ride/${response.data.ride._id}`);
       navigate(`/user/ride/${response.data.ride._id}`);
     } catch (error: any) {
       console.error('Error starting ride:', error);
@@ -896,7 +875,6 @@ export const BookingPage: React.FC = () => {
       
       // Check if it's an authentication error
       if (error.response?.status === 401) {
-        console.log('startRideDirectly - Authentication error detected, redirecting to login');
         toast.error('Authentication expired. Please log in again.');
         // Clear tokens and redirect to login
         localStorage.removeItem('token');
@@ -905,7 +883,6 @@ export const BookingPage: React.FC = () => {
         window.location.href = '/auth/login';
         return;
       } else if (error.response?.status === 403) {
-        console.log('startRideDirectly - Forbidden error detected');
         toast.error('Access denied. Please contact support.');
         // Navigate to dashboard for forbidden errors
         navigate('/user/dashboard');
@@ -914,7 +891,6 @@ export const BookingPage: React.FC = () => {
         toast.error(error.response?.data?.message || 'Failed to start ride. Please contact support.');
       }
       // Fallback to dashboard if ride start fails
-      console.log('startRideDirectly - Navigating to dashboard as fallback');
       navigate('/user/dashboard');
     }
   };

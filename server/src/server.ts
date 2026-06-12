@@ -24,7 +24,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { setupSocketHandlers } from './services/socketService.js';
 import { socketAuth } from './middleware/socketAuth.js';
 import { analyticsRoutes } from './routes/analytics.js';
-import metricsRoutes from './routes/metrics.js';
+import metricsRoutes from './routes/metrics';
 import zoneRoutes from './routes/zones.js';
 import { checkAndEndScheduledRides } from './jobs/autoEndRides.js';
 
@@ -65,40 +65,33 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/zones', zoneRoutes);
 
-// Health check endpoint for Render
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
-  });
-});
-
-// Swagger documentation
-try {
-  const options = {
-    definition: {
-      openapi: '3.0.0',
-      info: {
-        title: 'EcoRide+ API',
-        version: '1.0.0',
-        description: 'API documentation for the EcoRide+ bicycle booking platform'
+// Swagger documentation — dev only, uses compiled JS to avoid TS parser crash
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    const options = {
+      definition: {
+        openapi: '3.0.0',
+        info: {
+          title: 'EcoRide+ API',
+          version: '1.0.0',
+          description: 'API documentation for the EcoRide+ bicycle booking platform'
+        },
+        servers: [
+          {
+            url: process.env.SERVER_URL || 'http://localhost:3000',
+            description: 'Development server'
+          }
+        ]
       },
-      servers: [
-        {
-          url: process.env.SERVER_URL || 'http://localhost:3000',
-          description: 'Development server'
-        }
-      ]
-    },
-    apis: ['./src/routes/*.ts'] // files containing annotations as above
-  };
+      apis: ['./dist/routes/*.js'] // scan compiled JS — avoids swagger-jsdoc TS parse crash
+    };
 
-  const specs = swaggerJsdoc(options);
-  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs));
-} catch (error) {
-  console.warn('⚠️  Swagger documentation failed to initialize:', error);
+    const specs = swaggerJsdoc(options);
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(specs));
+    console.log('📚 Swagger docs available at http://localhost:3000/api/docs');
+  } catch (error) {
+    console.warn('⚠️  Swagger docs skipped (run `npm run build` first to generate dist/)');
+  }
 }
 
 // Error handling middleware
