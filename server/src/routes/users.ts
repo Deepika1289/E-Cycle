@@ -225,4 +225,72 @@ router.patch('/:id/suspend', authenticate, authorize('ADMIN'), async (req, res, 
   }
 });
 
+// GET pending manager approvals — admin only
+router.get('/pending-approvals', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const pendingManagers = await User.find({ 
+      role: 'MANAGER', 
+      approvalStatus: 'PENDING' 
+    }).select('-password').sort({ createdAt: -1 });
+
+    res.json({ pendingManagers, count: pendingManagers.length });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// PATCH approve or reject a manager — admin only
+router.patch('/:id/approve', authenticate, authorize('ADMIN'), async (req: any, res, next) => {
+  try {
+    const { action } = req.body; // 'APPROVE' or 'REJECT'
+    if (!['APPROVE', 'REJECT'].includes(action)) {
+      return res.status(400).json({ message: 'action must be APPROVE or REJECT' });
+    }
+
+    const newStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: { approvalStatus: newStatus } },
+      { new: true }
+    ).select('-password');
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Email notification to manager
+    try {
+      const { sendEmail } = await import('../utils/email.js');
+      const isApproved = action === 'APPROVE';
+      await sendEmail({
+        to: user.email,
+        subject: `[E-Cycle] Your Manager Account has been ${isApproved ? 'Approved' : 'Rejected'}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;background:#f9fafb;border-radius:12px;">
+            <h2 style="color:${isApproved ? '#059669' : '#dc2626'};">
+              Account ${isApproved ? 'Approved ✅' : 'Rejected ❌'}
+            </h2>
+            <p>Dear ${user.name},</p>
+            ${isApproved
+              ? `<p>Your E-Cycle manager account has been <strong>approved</strong>! You can now log in using your username <strong>${user.username}</strong>.</p>
+                 <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/login" 
+                    style="display:inline-block;padding:12px 24px;background:#059669;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">
+                   Login Now
+                 </a>`
+              : `<p>Unfortunately, your E-Cycle manager account request has been <strong>rejected</strong> by the administrator. Please contact support for more information.</p>`
+            }
+          </div>
+        `
+      });
+    } catch (emailErr) {
+      console.error('Failed to send approval email:', emailErr);
+    }
+
+    res.json({ 
+      message: `Manager account ${action === 'APPROVE' ? 'approved' : 'rejected'} successfully`,
+      user 
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 export { router as userRoutes };

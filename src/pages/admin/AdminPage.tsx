@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Routes, Route, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Users, 
   Bike, 
@@ -8,21 +8,12 @@ import {
   TrendingUp,
   Activity,
   BarChart3,
-  ArrowUpRight,
-  ArrowDownRight,
   Plus,
   Edit,
   Trash2,
-  Eye,
-  Search,
   Filter,
   Download,
-  Bell,
   User,
-  LogOut,
-  Menu,
-  X,
-  Car,
   Clock,
   CheckCircle,
   AlertCircle,
@@ -128,10 +119,10 @@ interface AIRecommendation {
 }
 
 const AdminPage: React.FC = () => {
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [_activeTab, setActiveTab] = useState('dashboard');
+  const [_sidebarOpen, _setSidebarOpen] = useState(false);
   const [stats, setStats] = useState<Stats>({
     totalUsers: 1247,
     totalCycles: 127,
@@ -217,6 +208,8 @@ const AdminPage: React.FC = () => {
   const [cycles, setCycles] = useState<Cycle[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<User[]>([]);
+  const [approvingId, setApprovingId] = useState<string>('');
   const [rides, setRides] = useState<Ride[]>([
     // Active rides
     {
@@ -413,7 +406,7 @@ const AdminPage: React.FC = () => {
     latitude: 0,
     longitude: 0
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [_isLoading, setIsLoading] = useState(false);
 
   const getActiveTab = () => {
     const path = location.pathname.split('/').pop() || 'dashboard';
@@ -422,7 +415,6 @@ const AdminPage: React.FC = () => {
 
   const loadStats = async () => {
     try {
-      console.log('Loading stats...');
       
       // Load all data in parallel with individual error handling
       const usersPromise = userAPI.getAll({}).catch(error => {
@@ -459,7 +451,6 @@ const AdminPage: React.FC = () => {
         paymentsPromise
       ]);
 
-      console.log('API responses:', { usersResponse, cyclesResponse, stationsResponse, ridesResponse, paymentsResponse });
 
       // Calculate stats with improved error handling
       const totalUsers = usersResponse?.data?.users?.length || 0;
@@ -485,7 +476,6 @@ const AdminPage: React.FC = () => {
         ? payments.reduce((sum: number, payment: any) => sum + (payment?.amount || 0), 0)
         : 0;
 
-      console.log('Calculated stats:', { totalUsers, totalCycles, totalStations, totalRevenue, totalRides, activeRides });
 
       setStats({
         totalUsers,
@@ -591,7 +581,7 @@ const AdminPage: React.FC = () => {
           let date = '';
           try {
             date = new Date(payment.createdAt || payment.date || new Date().toISOString()).toISOString().split('T')[0];
-          } catch (error) {
+          } catch (_error) {
             date = new Date().toISOString().split('T')[0]; // fallback to today
           }
           
@@ -621,7 +611,6 @@ const AdminPage: React.FC = () => {
     try {
       // Load usage data for analytics
       const usageResponse = await analyticsAPI.usage({ days: 30 });
-      console.log('Analytics data loaded:', usageResponse.data);
       // Process usage data for charts if needed
       const usageData = usageResponse.data || [];
       setUsageData(usageData);
@@ -692,6 +681,29 @@ const AdminPage: React.FC = () => {
     }
   };
 
+  const loadPendingApprovals = async () => {
+    try {
+      const response = await userAPI.getPendingApprovals();
+      setPendingApprovals(response.data.pendingManagers || []);
+    } catch (_error) {
+      console.error('Error loading pending approvals:', _error);
+    }
+  };
+
+  const handleApproveUser = async (userId: string, action: 'APPROVE' | 'REJECT') => {
+    setApprovingId(userId);
+    try {
+      await userAPI.approveUser(userId, action);
+      toast.success(`Manager ${action === 'APPROVE' ? 'approved ✅' : 'rejected ❌'} successfully!`);
+      loadPendingApprovals();
+      loadUsers();
+    } catch (_error) {
+      toast.error('Failed to process approval');
+    } finally {
+      setApprovingId('');
+    }
+  };
+
   const loadRides = async () => {
     try {
       const response = await rideAPI.getAll({});
@@ -709,19 +721,19 @@ const AdminPage: React.FC = () => {
   const loadAllData = async () => {
     try {
       setIsLoading(true);
-      console.log('Starting to load all data...');
       
       // Load all data in parallel with individual error handling
       const results = await Promise.allSettled([
         loadStats(),
         loadRecentActivity(),
         loadRevenueData(),
-        loadAnalyticsData(), // Add analytics data loading
-        loadAIRecommendations(), // Add AI recommendations loading
+        loadAnalyticsData(),
+        loadAIRecommendations(),
         loadCycles(),
         loadStations(),
         loadUsers(),
-        loadRides()
+        loadRides(),
+        loadPendingApprovals()
       ]);
       
       // Check for any rejected promises and log errors
@@ -732,9 +744,8 @@ const AdminPage: React.FC = () => {
         }
       });
       
-      console.log('All data loading completed');
       setIsLoading(false);
-    } catch (error) {
+    } catch (_error) {
       console.error('Error loading all data:', error);
       toast.error('Failed to load dashboard data');
       setIsLoading(false);
@@ -839,7 +850,7 @@ const AdminPage: React.FC = () => {
     }
   };
 
-  const handleEditUser = (user: User) => {
+  const handleEditUser = (_user: User) => {
     // Implement user editing logic here
   };
 
@@ -1249,7 +1260,47 @@ const AdminPage: React.FC = () => {
         <Route path="users" element={
           <div className="space-y-6">
             <h2 className="text-xl font-semibold text-slate-800 dark:text-white">User Management</h2>
-            
+
+            {/* Pending Manager Approvals */}
+            {pendingApprovals.length > 0 && (
+              <div className="admin-glass p-6 border-2 border-amber-400/50 dark:border-amber-500/40">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse" />
+                  <h3 className="text-lg font-semibold text-amber-700 dark:text-amber-400">
+                    Pending Manager Approvals ({pendingApprovals.length})
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  {pendingApprovals.map((manager) => (
+                    <div key={manager._id} className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700/40">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-slate-800 dark:text-white">{manager.name}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">{manager.email}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-500">@{manager.username} · {manager.phone}</p>
+                        <p className="text-xs text-slate-400">Registered: {new Date(manager.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleApproveUser(manager._id.toString(), 'APPROVE')}
+                          disabled={approvingId === manager._id.toString()}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {approvingId === manager._id.toString() ? '...' : '✅ Approve'}
+                        </button>
+                        <button
+                          onClick={() => handleApproveUser(manager._id.toString(), 'REJECT')}
+                          disabled={approvingId === manager._id.toString()}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {approvingId === manager._id.toString() ? '...' : '❌ Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="admin-glass p-6">
               <div className="overflow-x-auto">
                 <table className="w-full">

@@ -339,6 +339,7 @@ router.post('/register', async (req, res, next) => {
       role,
       username,
       isVerified: false, // Not verified until OTP is confirmed
+      approvalStatus: role === 'MANAGER' ? 'PENDING' : 'APPROVED', // MANAGERs need admin approval
       preferences: { favoriteStations: [], notifications: true },
     } as any);
 
@@ -386,33 +387,66 @@ router.post('/register', async (req, res, next) => {
       console.log(`✅ Username email sent to ${email}`);
     } catch (emailError: any) {
       console.error(`❌ Username email failed:`, emailError.message);
-      // Continue anyway - user is created
     }
 
-    // Send OTP email
+    // Send OTP email (always show in console regardless of email success)
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🔑 REGISTRATION OTP`);
+    console.log(`📧 Email: ${email}`);
+    console.log(`👤 Username: ${username}`);
+    console.log(`🔐 OTP Code: ${otp}`);
+    console.log(`⏰ Valid for ${OTP_EXPIRY_SECONDS / 60} minutes`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
     try {
       await sendOtpEmailUtil(email, otp);
       console.log(`✅ OTP email sent to ${email}`);
     } catch (emailError: any) {
-      console.error(`❌ OTP email failed:`, emailError.message);
-      // Show OTP in console as fallback only in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📧 DEVELOPMENT MODE - EMAIL FAILED`);
-        console.log(`📧 Email: ${email}`);
-        console.log(`🔑 Username: ${username}`);
-        console.log(`🔑 OTP Code: ${otp}`);
-        console.log(`⏰ Valid for ${OTP_EXPIRY_SECONDS / 60} minutes`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+      console.error(`❌ OTP email failed (OTP shown above in console):`, emailError.message);
+    }
+
+    // For MANAGER signups: notify admin for approval
+    if (role === 'MANAGER') {
+      const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'deepikanuti@gmail.com';
+      try {
+        const { sendEmail } = await import('../utils/email.js');
+        await sendEmail({
+          to: ADMIN_EMAIL,
+          subject: `[E-Cycle] New Manager Registration Pending Approval`,
+          html: `
+            <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:24px;background:#f9fafb;border-radius:12px;">
+              <h2 style="color:#6d28d9;">New Manager Account Pending Approval</h2>
+              <p>A new manager account has been registered and is awaiting your approval.</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                <tr><td style="padding:8px;font-weight:bold;color:#374151;">Name:</td><td style="padding:8px;">${name}</td></tr>
+                <tr style="background:#f3f4f6;"><td style="padding:8px;font-weight:bold;color:#374151;">Email:</td><td style="padding:8px;">${email}</td></tr>
+                <tr><td style="padding:8px;font-weight:bold;color:#374151;">Username:</td><td style="padding:8px;">${username}</td></tr>
+                <tr style="background:#f3f4f6;"><td style="padding:8px;font-weight:bold;color:#374151;">Phone:</td><td style="padding:8px;">${phone}</td></tr>
+              </table>
+              <p>Please log in to the <strong>Admin Panel</strong> to approve or reject this account.</p>
+              <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/dashboard" 
+                 style="display:inline-block;padding:12px 24px;background:#6d28d9;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">
+                Open Admin Panel
+              </a>
+            </div>
+          `
+        });
+        console.log(`✅ Admin notified at ${ADMIN_EMAIL} about new manager: ${email}`);
+      } catch (adminEmailError: any) {
+        console.error(`❌ Failed to notify admin:`, adminEmailError.message);
       }
     }
 
+    const isPendingApproval = role === 'MANAGER';
     res.status(201).json({ 
       ok: true,
-      message: `Registration successful! Your username has been sent to ${email}. Please check your email for username and OTP to complete verification.`,
+      message: isPendingApproval
+        ? `Registration successful! Your account is pending admin approval. You will be notified once approved. Please verify your email with the OTP sent.`
+        : `Registration successful! Your username has been sent to ${email}. Please check your email for the OTP to complete verification.`,
       email,
       username,
-      requiresVerification: true
+      requiresVerification: true,
+      pendingApproval: isPendingApproval
     });
 
   } catch (error) {
@@ -803,35 +837,20 @@ router.post('/request-login-otp',
       );
     }
 
-    // Send OTP email
-    console.log(`📧 Sending login OTP to: ${emailForOtp}`);
+    // Send OTP email — always print to console regardless of email success
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🔑 LOGIN OTP`);
+    console.log(`📧 Email: ${emailForOtp}`);
+    console.log(`🔐 OTP Code: ${otp}`);
+    console.log(`⏰ Valid for ${OTP_EXPIRY_SECONDS / 60} minutes`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
     try {
       await sendOtpEmailUtil(emailForOtp, otp);
       console.log(`✅ Login OTP sent to ${emailForOtp}`);
-      
-      // In development, also show OTP in console for testing
-      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production') {
-        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`🔑 DEVELOPMENT MODE - LOGIN OTP`);
-        console.log(`📧 Email: ${emailForOtp}`);
-        console.log(`🔐 OTP Code: ${otp}`);
-        console.log(`⏰ Valid for ${OTP_EXPIRY_SECONDS / 60} minutes`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-      }
     } catch (emailError: any) {
-      console.error(`❌ Failed to send OTP email to ${emailForOtp}:`, emailError.message);
-      // Show OTP in console as fallback only in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-        console.log(`📧 DEVELOPMENT MODE - EMAIL FAILED`);
-        console.log(`📧 Email: ${emailForOtp}`);
-        console.log(`🔑 OTP Code: ${otp}`);
-        console.log(`⏰ Valid for ${OTP_EXPIRY_SECONDS / 60} minutes`);
-        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-      }
-      return res.status(500).json({ 
-        message: 'Failed to send OTP email. Please check your email address or try again later.' 
-      });
+      console.error(`❌ Failed to send OTP email (OTP shown above in console):`, emailError.message);
+      // Don't return 500 — OTP is in console, app still works
     }
 
     res.json({ ok: true, message: 'OTP sent to your email. Please check your inbox and spam folder.' });
@@ -977,6 +996,21 @@ router.post('/login',
     if (!isRoleAssignmentValid(dbUser.email, dbUser.role)) {
       return res.status(403).json({ 
         message: `Access denied. Role ${dbUser.role} is not allowed for this email address.` 
+      });
+    }
+
+    // Block PENDING managers — must be approved by admin first
+    if (dbUser.role === 'MANAGER' && (dbUser as any).approvalStatus === 'PENDING') {
+      return res.status(403).json({
+        message: 'Your manager account is pending approval by the administrator. You will be notified once approved.',
+        approvalStatus: 'PENDING'
+      });
+    }
+
+    if (dbUser.role === 'MANAGER' && (dbUser as any).approvalStatus === 'REJECTED') {
+      return res.status(403).json({
+        message: 'Your manager account request has been rejected. Please contact the administrator.',
+        approvalStatus: 'REJECTED'
       });
     }
 

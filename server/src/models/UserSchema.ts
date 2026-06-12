@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { IUser } from '../types/index.js';
+import { IUser } from '../types';
 
 export const UserSchema = new Schema<IUser>({
   email: {
@@ -55,6 +55,12 @@ export const UserSchema = new Schema<IUser>({
   isVerified: {
     type: Boolean,
     default: false
+  },
+  approvalStatus: {
+    type: String,
+    enum: ['PENDING', 'APPROVED', 'REJECTED'],
+    default: 'APPROVED', // USERs auto-approved; MANAGERs set to PENDING on register
+    index: true
   },
   otpCode: { type: String, select: false },
   otpExpiresAt: { type: Date, select: false },

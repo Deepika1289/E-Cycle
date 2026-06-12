@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Lock, Mail, User, Shield, ArrowRight, RotateCcw, Home } from 'lucide-react';
+import { Lock, User, Shield, ArrowRight, RotateCcw, Home } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/ui/card';
@@ -19,7 +19,6 @@ export const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const { authenticateWithToken } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   // Cooldown timer
@@ -106,12 +105,29 @@ export const Login = () => {
         // No need to navigate here as authenticateWithToken already does it
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
-      toast({
-        title: 'Login failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      const status = error.response?.status;
+      const data = error.response?.data;
+      
+      if (status === 403 && data?.approvalStatus === 'PENDING') {
+        toast({
+          title: '⏳ Account Pending Approval',
+          description: 'Your manager account is awaiting admin approval. You will receive an email once approved.',
+          variant: 'destructive',
+        });
+      } else if (status === 403 && data?.approvalStatus === 'REJECTED') {
+        toast({
+          title: '❌ Account Rejected',
+          description: 'Your manager account was rejected. Please contact the administrator.',
+          variant: 'destructive',
+        });
+      } else {
+        const errorMessage = data?.message || 'Login failed. Please try again.';
+        toast({
+          title: 'Login failed',
+          description: errorMessage,
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -136,7 +152,7 @@ export const Login = () => {
         title: 'OTP Resent',
         description: 'A new OTP has been sent to your email.',
       });
-    } catch (error: any) {
+    } catch (_error) {
       toast({
         title: 'Error',
         description: 'Failed to resend OTP. Please try again.',

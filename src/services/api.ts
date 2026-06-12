@@ -37,46 +37,34 @@ const createAuthExpiredEvent = () => new CustomEvent('authExpired');
 // Response interceptor to handle token refresh
 api.interceptors.response.use(
   (response) => {
-    console.log('API Interceptor - Response received:', response.config.url, response.status);
     return response;
   },
   async (error) => {
     const originalRequest = error.config;
-    console.log('API Interceptor - Error status:', error.response?.status);
-    console.log('API Interceptor - Original request URL:', originalRequest?.url);
-    console.log('API Interceptor - Original request method:', originalRequest?.method);
     
     // If error is 401 and we haven't tried to refresh token yet
     if (error.response?.status === 401 && !originalRequest._retry) {
-      console.log('API Interceptor - 401 error detected, attempting token refresh');
       originalRequest._retry = true;
       
       try {
         const refreshToken = localStorage.getItem('refreshToken');
-        console.log('API Interceptor - Refresh token found:', !!refreshToken);
         if (refreshToken) {
-          console.log('API Interceptor - Attempting to refresh token');
           const response = await api.post('/auth/refresh', { refreshToken });
           const { token: newToken } = response.data;
           
-          console.log('API Interceptor - Token refreshed successfully');
           localStorage.setItem('token', newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           
           return api(originalRequest);
-        } else {
-          console.log('API Interceptor - No refresh token found, emitting authExpired event');
         }
-      } catch (refreshError) {
+      } catch (_refreshError) {
         // If refresh fails, remove tokens and emit auth expired event
-        console.log('API Interceptor - Token refresh failed, emitting authExpired event');
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
         // Emit event for AuthContext to handle
         if (typeof window !== 'undefined') {
           window.dispatchEvent(createAuthExpiredEvent());
         }
-        console.log('Token refresh failed, auth expired');
       }
     }
     
@@ -204,7 +192,6 @@ export const rideAPI = {
   getById: (id: string) => api.get(`/rides/${id}`),
   
   start: (data: { bookingId: string; latitude: number; longitude: number; }) => {
-    console.log('rideAPI.start - Making request with data:', data);
     return api.post('/rides/start', data);
   },
   
@@ -287,6 +274,11 @@ export const userAPI = {
   
   suspendUser: (id: string, status: 'ACTIVE' | 'SUSPENDED') =>
     api.patch(`/users/${id}/suspend`, { status }),
+
+  getPendingApprovals: () => api.get('/users/pending-approvals'),
+
+  approveUser: (id: string, action: 'APPROVE' | 'REJECT') =>
+    api.patch(`/users/${id}/approve`, { action }),
 };
 
 export default api;

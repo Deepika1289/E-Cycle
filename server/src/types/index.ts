@@ -30,6 +30,7 @@ export interface IUser extends Document {
   role: 'USER' | 'MANAGER' | 'ADMIN';
   walletBalance: number;
   isVerified: boolean;
+  approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   status: 'ACTIVE' | 'SUSPENDED';
   otpCode?: string | null;
   otpExpiresAt?: Date | null;
@@ -60,7 +61,7 @@ export interface IStation extends Document {
 export interface ICycle {
   _id: Types.ObjectId;
   code: string;
-  cycleModel: string;
+  model: string;
   batteryLevel?: number;
   status: 'AVAILABLE' | 'BOOKED' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
   location: {
