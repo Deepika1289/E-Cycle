@@ -935,7 +935,7 @@ router.post('/login',
         { username: identifier },
         { email: identifier }
       ]
-    });
+    }).select('+password');
 
     if (!dbUser) {
       return res.status(401).json({ message: 'User not found' });
