@@ -581,7 +581,7 @@ const AdminPage: React.FC = () => {
           let date = '';
           try {
             date = new Date(payment.createdAt || payment.date || new Date().toISOString()).toISOString().split('T')[0];
-          } catch (_error) {
+          } catch (error) {
             date = new Date().toISOString().split('T')[0]; // fallback to today
           }
           
@@ -685,8 +685,8 @@ const AdminPage: React.FC = () => {
     try {
       const response = await userAPI.getPendingApprovals();
       setPendingApprovals(response.data.pendingManagers || []);
-    } catch (_error) {
-      console.error('Error loading pending approvals:', _error);
+    } catch (error) {
+      console.error('Error loading pending approvals:', error);
     }
   };
 
@@ -697,7 +697,7 @@ const AdminPage: React.FC = () => {
       toast.success(`Manager ${action === 'APPROVE' ? 'approved ✅' : 'rejected ❌'} successfully!`);
       loadPendingApprovals();
       loadUsers();
-    } catch (_error) {
+    } catch (error) {
       toast.error('Failed to process approval');
     } finally {
       setApprovingId('');
@@ -745,7 +745,7 @@ const AdminPage: React.FC = () => {
       });
       
       setIsLoading(false);
-    } catch (_error) {
+    } catch (error) {
       console.error('Error loading all data:', error);
       toast.error('Failed to load dashboard data');
       setIsLoading(false);

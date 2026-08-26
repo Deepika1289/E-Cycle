@@ -88,7 +88,7 @@ export const DashboardPage: React.FC = () => {
             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
           });
           userLocation = [position.coords.latitude, position.coords.longitude];
-        } catch (_error) {
+        } catch (error) {
           console.warn('Could not get user location:', error);
         }
       }
@@ -152,7 +152,7 @@ export const DashboardPage: React.FC = () => {
 
       // AI recommendations are now handled by the AIRecommendations component
 
-    } catch (_error) {
+    } catch (error) {
       console.error('Error loading dashboard data:', error);
       toast.error('Failed to load dashboard data');
     } finally {
@@ -288,7 +288,7 @@ export const DashboardPage: React.FC = () => {
       // Re-fetch user from server to get the accurate wallet balance
       await refreshAuth();
       loadDashboardData();
-    } catch (_error) {
+    } catch (error) {
       toast.error('Failed to top up wallet');
     } finally {
       setIsTopingUp(false);
