@@ -65,6 +65,11 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/zones', zoneRoutes);
 
+// Health check endpoint for Render
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date() });
+});
+
 // Swagger documentation — dev only, uses compiled JS to avoid TS parser crash
 if (process.env.NODE_ENV !== 'production') {
   try {
