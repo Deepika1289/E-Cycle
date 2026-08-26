@@ -11,7 +11,7 @@
     "add-rides": "node src/scripts/addRides.js",
     "check-values": "node src/scripts/checkDatabaseValues.js",
     "test-api": "node src/scripts/testAPICalls.js",
-    "test": "jest"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

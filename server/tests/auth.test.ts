@@ -1,4 +1,5 @@
 import { authenticate, authorize } from '../src/middleware/auth';
+import { jest } from '@jest/globals';
 
 const createRes = () => {
   const res: any = {};

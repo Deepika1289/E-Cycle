@@ -62,6 +62,7 @@ export interface ICycle {
   _id: Types.ObjectId;
   code: string;
   model: string;
+  cycleModel: string;
   batteryLevel?: number;
   status: 'AVAILABLE' | 'BOOKED' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
   location: {
