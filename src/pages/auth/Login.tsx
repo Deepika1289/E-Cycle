@@ -15,6 +15,7 @@ export const Login = () => {
   const [formData, setFormData] = useState({
     username: '',
     otp: '',
+    password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -37,9 +38,61 @@ export const Login = () => {
     }));
   };
 
-  // Step 1: Request OTP with username or email
-  const handleRequestOtp = async (e: React.FormEvent) => {
+  const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.password) {
+      toast({
+        title: 'Password required',
+        description: 'Please enter your password',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const isEmail = formData.username.includes('@');
+      const payload = isEmail 
+        ? { email: formData.username, password: formData.password }
+        : { username: formData.username, password: formData.password };
+        
+      const response = await authAPI.login(payload);
+      
+      if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+        await authenticateWithToken(response.data.token);
+      }
+    } catch (error: any) {
+      const status = error.response?.status;
+      const data = error.response?.data;
+      
+      if (status === 403 && data?.approvalStatus === 'PENDING') {
+        toast({
+          title: '⏳ Account Pending Approval',
+          description: 'Your manager account is awaiting admin approval.',
+          variant: 'destructive',
+        });
+      } else if (status === 403 && data?.approvalStatus === 'REJECTED') {
+        toast({
+          title: '❌ Account Rejected',
+          description: 'Your manager account was rejected.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Login failed',
+          description: data?.message || 'Invalid username or password',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 1: Request OTP with username or email
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsLoading(true);
     
     try {
@@ -241,10 +294,10 @@ export const Login = () => {
             </div>
           </CardHeader>
           
-          {/* Step 1: Username Input */}
+          {/* Step 1: Credentials Input */}
           {step === 'credentials' && (
             <motion.form 
-              onSubmit={handleRequestOtp}
+              onSubmit={handlePasswordLogin}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
@@ -272,14 +325,35 @@ export const Login = () => {
                     />
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+                    </div>
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      className="pl-10 py-6"
+                      placeholder="Enter your password"
+                    />
+                  </div>
+                </div>
               </CardContent>
               <CardFooter className="flex flex-col space-y-4 px-6 pb-6">
                 <Button 
                   type="submit" 
                   className="w-full py-6 text-lg font-semibold bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
-                  disabled={isLoading}
+                  disabled={isLoading || !formData.password}
                 >
-                  {isLoading ? (
+                  {isLoading && formData.password ? (
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -287,8 +361,34 @@ export const Login = () => {
                     />
                   ) : (
                     <span className="flex items-center gap-2">
-                      Send OTP
+                      Login with Password
                       <ArrowRight className="h-5 w-5" />
+                    </span>
+                  )}
+                </Button>
+
+                <div className="relative w-full flex items-center py-2">
+                  <div className="flex-grow border-t border-gray-300 dark:border-slate-700"></div>
+                  <span className="flex-shrink-0 px-4 text-sm text-gray-500 dark:text-gray-400">or</span>
+                  <div className="flex-grow border-t border-gray-300 dark:border-slate-700"></div>
+                </div>
+
+                <Button 
+                  type="button"
+                  variant="outline"
+                  onClick={handleRequestOtp}
+                  className="w-full py-6 text-lg font-semibold border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-300 dark:hover:bg-purple-900/30"
+                  disabled={isLoading || !formData.username}
+                >
+                  {isLoading && !formData.password ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="h-5 w-5 border-2 border-purple-500 border-t-transparent rounded-full"
+                    />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      Login with OTP instead
                     </span>
                   )}
                 </Button>

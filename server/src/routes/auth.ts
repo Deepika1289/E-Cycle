@@ -19,8 +19,8 @@ const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email format'),
   phone: z.string().min(10, 'Phone must be at least 10 digits'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['USER', 'MANAGER', 'ADMIN']).optional().default('USER')
-  // Removed password requirement
 });
 
 const loginSchema = z.object({
@@ -303,7 +303,7 @@ router.post('/request-registration-otp',
 router.post('/register', async (req, res, next) => {
   try {
     const validatedData = registerSchema.parse(req.body);
-    const { email, name, phone, role } = validatedData;
+    const { email, name, phone, password, role } = validatedData;
     
     console.log(`🔑 Registration request for: ${email}`);
     
@@ -326,10 +326,9 @@ router.post('/register', async (req, res, next) => {
     // Generate unique username based on role
     const username = await generateUsername(role);
     
-    // Generate random password for security (user won't use it)
-    const randomPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
+    // Hash the provided password
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(randomPassword, salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = new User({
       name,
@@ -905,19 +904,28 @@ router.post('/login',
       .normalizeEmail()
       .trim(),
     body('otp')
+      .optional()
       .isLength({ min: 6, max: 6 }).withMessage('OTP must be exactly 6 digits')
       .isNumeric().withMessage('OTP must contain only numbers')
+      .trim(),
+    body('password')
+      .optional()
+      .isString().withMessage('Password must be a string')
       .trim(),
   ],
   handleValidationErrors,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
     // Accept either username or email
-    const { username, email, otp } = req.body;
+    const { username, email, otp, password } = req.body;
     const identifier = email || username;
 
     if (!identifier) {
       return res.status(400).json({ message: 'Username or email is required' });
+    }
+
+    if (!otp && !password) {
+      return res.status(400).json({ message: 'Either OTP or password is required' });
     }
 
     // First, find the user by username or email to get their email address
@@ -936,54 +944,63 @@ router.post('/login',
     // Use the user's email for OTP verification (consistent with storage)
     const emailForOtp = dbUser.email;
 
-    // Verify OTP first
-    let otpValid = false;
-    
-    // Try Redis first
-    const redisRec = await redisStore.getOtpRecord(emailForOtp);
-    if (redisRec) {
-      if ((redisRec.attempts || 0) >= OTP_MAX_VERIFY_ATTEMPTS) {
+    // Verify authentication credentials
+    let authValid = false;
+
+    if (password) {
+      // Verify using password
+      authValid = await bcrypt.compare(password, dbUser.password);
+      if (!authValid) {
+        return res.status(401).json({ message: 'Invalid password' });
+      }
+    } else if (otp) {
+      // Verify using OTP
+      // Try Redis first
+      const redisRec = await redisStore.getOtpRecord(emailForOtp);
+      if (redisRec) {
+        if ((redisRec.attempts || 0) >= OTP_MAX_VERIFY_ATTEMPTS) {
+          await redisStore.deleteOtp(emailForOtp);
+          return res.status(429).json({ 
+            message: 'Too many verification attempts. Please request a new OTP.' 
+          });
+        }
+        
+        authValid = await verifyOtpHash(otp, redisRec.hash);
+        if (!authValid) {
+          await redisStore.incrementAttempts(emailForOtp);
+          return res.status(400).json({ 
+            message: 'Invalid OTP. Please check and try again.',
+            attemptsRemaining: OTP_MAX_VERIFY_ATTEMPTS - (redisRec.attempts || 0) - 1
+          });
+        }
+        
         await redisStore.deleteOtp(emailForOtp);
-        return res.status(429).json({ 
-          message: 'Too many verification attempts. Please request a new OTP.' 
-        });
-      }
-      
-      otpValid = await verifyOtpHash(otp, redisRec.hash);
-      if (!otpValid) {
-        await redisStore.incrementAttempts(emailForOtp);
-        return res.status(400).json({ 
-          message: 'Invalid OTP. Please check and try again.',
-          attemptsRemaining: OTP_MAX_VERIFY_ATTEMPTS - (redisRec.attempts || 0) - 1
-        });
-      }
-      
-      await redisStore.deleteOtp(emailForOtp);
-    } else {
-      // Fallback to MongoDB
-      const record = await OtpModel.findOne({ email: emailForOtp });
-      if (!record) {
-        return res.status(400).json({ message: 'OTP expired or not found. Please request a new OTP.' });
-      }
-      
-      if (record.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+      } else {
+        // Fallback to MongoDB
+        const record = await OtpModel.findOne({ email: emailForOtp });
+        if (!record) {
+          return res.status(400).json({ message: 'OTP expired or not found. Please request a new OTP.' });
+        }
+        
+        if (record.attempts >= OTP_MAX_VERIFY_ATTEMPTS) {
+          await record.deleteOne();
+          return res.status(429).json({ 
+            message: 'Too many verification attempts. Please request a new OTP.' 
+          });
+        }
+        
+        authValid = await verifyOtpHash(otp, record.hash);
+        if (!authValid) {
+          record.attempts += 1;
+          await record.save();
+          return res.status(400).json({ 
+            message: 'Invalid OTP. Please check and try again.',
+            attemptsRemaining: OTP_MAX_VERIFY_ATTEMPTS - record.attempts
+          });
+        }
+        
         await record.deleteOne();
-        return res.status(429).json({ 
-          message: 'Too many verification attempts. Please request a new OTP.' 
-        });
       }
-      
-      otpValid = await verifyOtpHash(otp, record.hash);
-      if (!otpValid) {
-        record.attempts += 1;
-        await record.save();
-        return res.status(400).json({ 
-          message: 'Invalid OTP. Please check and try again.',
-          attemptsRemaining: OTP_MAX_VERIFY_ATTEMPTS - record.attempts
-        });
-      }
-      
-      await record.deleteOne();
     }
 
     // Mark user as verified if not already

@@ -17,6 +17,7 @@ export const Register = () => {
     name: '',
     email: '',
     phone: '',
+    password: '',
     role: 'USER' as 'USER' | 'MANAGER' | 'ADMIN',
   });
   const [otp, setOtp] = useState('');
@@ -323,10 +324,29 @@ export const Register = () => {
                     />
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    Password
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      required
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Enter a secure password"
+                      className="pl-10 py-5"
+                    />
+                  </div>
+                </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="role" className="flex items-center gap-2">
-                    <Lock className="h-4 w-4" />
+                    <Shield className="h-4 w-4" />
                     Role
                   </Label>
                   <Select onValueChange={handleRoleChange} defaultValue="USER">
